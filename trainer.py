@@ -24,7 +24,9 @@ from layers import *
 import datasets
 import networks
 from IPython import embed
-
+import csv
+import yaml
+import numpy as np
 
 class Trainer:
     def __init__(self, options):
@@ -112,7 +114,8 @@ class Trainer:
 
         # data
         datasets_dict = {"kitti": datasets.KITTIRAWDataset,
-                         "kitti_odom": datasets.KITTIOdomDataset}
+                         "kitti_odom": datasets.KITTIOdomDataset,
+                         "euro_c": datasets.MonoPoseDataset}
         self.dataset = datasets_dict[self.opt.dataset]
 
         fpath = os.path.join(os.path.dirname(__file__), "splits", self.opt.split, "{}_files.txt")
@@ -193,7 +196,7 @@ class Trainer:
     def run_epoch(self):
         """Run a single epoch of training and validation
         """
-        self.model_lr_scheduler.step()
+        #self.model_lr_scheduler.step()
 
         print("Training")
         self.set_train()
@@ -207,6 +210,7 @@ class Trainer:
             self.model_optimizer.zero_grad()
             losses["loss"].backward()
             self.model_optimizer.step()
+
 
             duration = time.time() - before_op_time
 
@@ -224,6 +228,8 @@ class Trainer:
                 self.val()
 
             self.step += 1
+
+        self.model_lr_scheduler.step()
 
     def process_batch(self, inputs):
         """Pass a minibatch through the network and generate images and losses
@@ -250,6 +256,57 @@ class Trainer:
 
         if self.opt.predictive_mask:
             outputs["predictive_mask"] = self.models["predictive_mask"](features)
+
+        # euroc_cam0_data_file = "/media/adit/storage/Downloads/EUROC_dataset/MH_02_easy/mav0/cam0/data.csv"
+        # euroc_cam0_sensor_file = "/media/adit/storage/Downloads/EUROC_dataset/MH_02_easy/mav0/cam0/sensor.yaml"
+        # euroc_glob_state_data_file = "/media/adit/storage/Downloads/EUROC_dataset/MH_02_easy/mav0/state_groundtruth_estimate0/data.csv"
+        # euroc_glob_state_sensor_file = "/media/adit/storage/Downloads/EUROC_dataset/MH_02_easy/mav0/state_groundtruth_estimate0/sensor.yaml"
+        # euroc_leica0_sensor_file = "/media/adit/storage/Downloads/EUROC_dataset/MH_02_easy/mav0/leica0/sensor.yaml"
+        #
+        # #Read transformation matrices
+        # with open(euroc_cam0_sensor_file, 'r') as fp:
+        #     yaml_data_loaded = yaml.safe_load(fp)
+        #     T_imu2cam = yaml_data_loaded['T_BS']['data']
+        #     inputs['T_imu2cam'] = T_imu2cam
+        #
+        # with open(euroc_glob_state_sensor_file, 'r') as fp:
+        #     yaml_data_loaded = yaml.safe_load(fp)
+        #     T_imu2body = yaml_data_loaded['T_BS']['data']
+        #     inputs['T_imu2body'] = T_imu2body
+        #
+        # with open(euroc_leica0_sensor_file, 'r') as fp:
+        #     yaml_data_loaded = yaml.safe_load(fp)
+        #     T_marker2body = yaml_data_loaded['T_BS']['data']
+        #     inputs['T_marker2body'] = T_marker2body
+
+        # #Extract data from the Euroc sensors
+        # cam_ts_list = []
+        # with open(euroc_cam0_data_file) as csvfile:
+        #     readcam0 = csv.reader(csvfile, delimiter=',')
+        #     #readcam0 = csv.DictReader(csvfile, fieldnames=['#timestamps[ns]'])
+        #     header = next(readcam0)
+        #     values = list(readcam0)
+        #     for i in range(len(values)):
+        #        cam_ts_list.append(values[i][0])
+        #
+        # #Extract glob state data from csv file
+        # globvalues = []
+        # with open(euroc_glob_state_data_file) as csvfile:
+        #     readglobstate = csv.reader(csvfile, delimiter=',')
+        #     globheader = next(readglobstate)
+        #     globvalues = list(readglobstate)
+        #
+        # glob_ts_array = np.array(globvalues)[:, 0] # timestamps of glob state
+        # glob_ts_array = ( glob_ts_array.astype(int) // 1000)
+        #
+        # cam_ts_array = np.array(cam_ts_list)
+        # cam_ts_array = cam_ts_array.astype(int) // 1000
+        #
+        # valid_glob_indices = np.nonzero(np.in1d(glob_ts_array, cam_ts_array))[0]
+        # #Update the inputs with
+        # inputs['glob_state'] = [globvalues[i][:] for i in valid_glob_indices]
+
+
 
         if self.use_pose_net:
             outputs.update(self.predict_poses(inputs, features))
